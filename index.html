@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>見錢腦開｜樂齡金額反應遊戲</title>
+    <!-- 引入 Tailwind CSS 以進行快速且美觀的排版 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <!-- 引入 Tone.js 來產生安全的網頁合成音效 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #FFF9E6; /* 溫暖的淺黃色背景 */
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+
+        /* 遊戲區域的自訂樣式 */
+        #game-board {
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(180deg, #ffffff 0%, #fdf5e6 100%);
+            box-shadow: inset 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        /* 錢幣掉落的動畫 */
+        @keyframes dropIn {
+            0% {
+                transform: translateY(-50px) scale(0.5);
+                opacity: 0;
+            }
+            70% {
+                transform: translateY(10px) scale(1.1);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* 錢幣的通用類別 */
+        .money-item {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            box-shadow: 2px 4px 8px rgba(0,0,0,0.2);
+            animation: dropIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            user-select: none;
+        }
+
+        /* 10元硬幣樣式 (銀色) */
+        .coin-10 {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #e2e8f0 40%, #cbd5e1 100%);
+            border: 4px solid #94a3b8;
+            color: #475569;
+            font-size: 28px;
+        }
+
+        /* 50元硬幣樣式 (金色) */
+        .coin-50 {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #fde047 40%, #eab308 100%);
+            border: 4px solid #ca8a04;
+            color: #854d0e;
+            font-size: 32px;
+        }
+
+        /* 100元紙鈔樣式 (紅色) */
+        .bill-100 {
+            width: 140px;
+            height: 70px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #fecaca 0%, #f87171 100%);
+            border: 3px solid #dc2626;
+            color: #7f1d1d;
+            font-size: 36px;
+            letter-spacing: 2px;
+        }
+
+        /* 500元紙鈔樣式 (深咖啡色) */
+        .bill-500 {
+            width: 150px;
+            height: 75px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #d6d3d1 0%, #a8a29e 100%);
+            border: 3px solid #78716c;
+            color: #44403c;
+            font-size: 38px;
+            letter-spacing: 2px;
+        }
+        
+        /* 1000元紙鈔樣式 (藍色) */
+        .bill-1000 {
+            width: 160px;
+            height: 80px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #bfdbfe 0%, #60a5fa 100%);
+            border: 3px solid #2563eb;
+            color: #1e3a8a;
+            font-size: 40px;
+            letter-spacing: 2px;
+        }
+        
+        /* 音樂控制按鈕樣式 */
+        #music-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background-color: #fff;
+            border: 3px solid #cbd5e1;
+            font-size: 28px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            z-index: 100;
+        }
+        #music-toggle:hover {
+            transform: scale(1.1);
+            border-color: #94a3b8;
+        }
+
+        /* 全螢幕控制按鈕 */
+        #fullscreen-toggle {
+            position: absolute;
+            top: 20px;
+            right: 92px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background-color: #fff;
+            border: 3px solid #cbd5e1;
+            font-size: 28px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            z-index: 100;
+        }
+
+        #fullscreen-toggle:hover {
+            transform: scale(1.1);
+            border-color: #94a3b8;
+        }
+
+        @media (max-width: 640px) {
+            #music-toggle,
+            #fullscreen-toggle {
+                top: 12px;
+                width: 50px;
+                height: 50px;
+                font-size: 24px;
+            }
+
+            #music-toggle { right: 12px; }
+            #fullscreen-toggle { right: 72px; }
+        }
+
+        /* 開始前倒數的全螢幕提示 */
+        #countdown-overlay {
+            z-index: 50;
+            background: rgba(255, 247, 218, 0.94);
+            backdrop-filter: blur(3px);
+        }
+
+        @keyframes countdownPop {
+            0% { transform: scale(0.55); opacity: 0; }
+            70% { transform: scale(1.12); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .countdown-pop {
+            animation: countdownPop 0.55s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* 作答倒數：時間快到時變成醒目的橘紅色 */
+        #answer-timer.timer-warning {
+            background-color: #fee2e2;
+            border-color: #ef4444;
+            color: #b91c1c;
+            animation: pulse 1s infinite;
+        }
+
+        #answer-timer.time-up {
+            background-color: #dcfce7;
+            border-color: #22c55e;
+            color: #166534;
+        }
+
+        /* 桌機／投影採 16:9 遊戲畫面，讓所有重要資訊維持在同一個畫面內 */
+        #app-shell {
+            width: min(100%, calc((100vh - 8px) * 1.7778));
+            max-width: 1280px;
+            aspect-ratio: 16 / 9;
+            flex: 0 1 auto;
+            overflow: hidden;
+        }
+
+        #app-shell header {
+            margin-bottom: 0.6rem;
+            padding-top: 0;
+        }
+
+        #app-shell header h1 {
+            font-size: clamp(2.2rem, 4vw, 3.2rem);
+            margin-bottom: 0.25rem;
+        }
+
+        #app-shell header > div {
+            font-size: 1rem;
+            padding: 0.3rem 1rem;
+            margin-bottom: 0.25rem;
+        }
+
+        #app-shell header > p {
+            font-size: clamp(1rem, 1.7vw, 1.35rem);
+            padding: 0.3rem 0.8rem;
+        }
+
+        #difficulty-selector {
+            gap: 0.5rem;
+            margin-bottom: 0.6rem;
+        }
+
+        #difficulty-selector label {
+            font-size: 1rem;
+            padding: 0.35rem 0.7rem;
+        }
+
+        #difficulty-selector input {
+            width: 1.25rem;
+            height: 1.25rem;
+        }
+
+        #app-shell #game-board {
+            flex: 1 1 auto;
+            min-height: 0 !important;
+            margin-bottom: 0.75rem;
+        }
+
+        #answer-timer {
+            position: absolute;
+            left: 50%;
+            bottom: 1rem;
+            transform: translateX(-50%);
+            z-index: 60;
+            max-width: calc(100% - 1.5rem);
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        #game-controls {
+            flex: 0 0 auto;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        #game-controls > div:first-child {
+            gap: 0.75rem;
+        }
+
+        /* 全螢幕時把遊戲區放大，方便投影或團體活動觀看 */
+        html:fullscreen #app-shell {
+            width: min(100vw, calc(100vh * 1.7778));
+            max-width: 1600px;
+            min-height: 0;
+        }
+
+        html:fullscreen #game-board {
+            min-height: 0 !important;
+        }
+
+        /* 手機維持直向可讀性；桌機與投影則使用上面的 16:9 版面 */
+        @media (max-width: 800px) {
+            #app-shell {
+                width: 100%;
+                max-width: none;
+                aspect-ratio: auto;
+                min-height: 100vh;
+                overflow: visible;
+                flex: 1 0 auto;
+            }
+
+            #app-shell header {
+                padding-top: 3.5rem;
+            }
+
+            #app-shell #game-board {
+                flex: none;
+                min-height: 300px !important;
+            }
+
+            #answer-timer {
+                bottom: 0.75rem;
+                font-size: 1.35rem;
+                padding: 0.65rem 1rem;
+            }
+
+            #difficulty-selector {
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+    <!-- 音樂控制按鈕 -->
+    <button id="music-toggle" onclick="toggleMusic()" title="開啟/關閉音樂">🔇</button>
+    <button id="fullscreen-toggle" onclick="toggleFullscreen()" title="切換全螢幕">⛶</button>
+
+    <div id="app-shell" class="container mx-auto w-full px-4 py-5 sm:px-6 sm:py-6 flex-grow flex flex-col max-w-6xl relative">
+        
+        <!-- 標題區 -->
+        <header class="text-center mb-6 pt-14 sm:pt-0">
+            <h1 class="text-4xl md:text-5xl font-black text-red-600 drop-shadow-md mb-2">💰 見錢腦開 🧠</h1>
+            <!-- 加入製作者署名 -->
+            <div class="inline-block bg-orange-100 border-2 border-orange-300 text-orange-800 font-bold text-xl px-6 py-2 rounded-full mb-4 shadow-sm">
+                ✨ 製作者：羅玉函 ✨
+            </div>
+            <br>
+            <p class="text-xl md:text-2xl text-gray-700 font-bold bg-yellow-200 inline-block px-4 py-2 rounded-full shadow">
+                請看清楚畫面上總共掉下多少錢喔！
+            </p>
+        </header>
+
+        <!-- 難度選擇區 -->
+        <div id="difficulty-selector" class="flex justify-center gap-4 mb-4">
+            <label class="text-xl font-bold flex items-center gap-2 cursor-pointer bg-white px-4 py-2 rounded-lg shadow-sm border-2 border-gray-200">
+                <input type="radio" name="difficulty" value="easy" checked class="w-6 h-6 text-red-600 focus:ring-red-500">
+                <span>簡單 (硬幣)</span>
+            </label>
+            <label class="text-xl font-bold flex items-center gap-2 cursor-pointer bg-white px-4 py-2 rounded-lg shadow-sm border-2 border-gray-200">
+                <input type="radio" name="difficulty" value="medium" class="w-6 h-6 text-red-600 focus:ring-red-500">
+                <span>中等 (紙鈔)</span>
+            </label>
+            <label class="text-xl font-bold flex items-center gap-2 cursor-pointer bg-white px-4 py-2 rounded-lg shadow-sm border-2 border-gray-200">
+                <input type="radio" name="difficulty" value="hard" class="w-6 h-6 text-red-600 focus:ring-red-500">
+                <span>困難 (混合)</span>
+            </label>
+        </div>
+
+        <!-- 遊戲主畫面 -->
+        <div id="game-board" class="flex-grow w-full border-8 border-orange-400 rounded-3xl mb-6 min-h-[300px] sm:min-h-[380px] lg:min-h-[460px]">
+            <!-- 錢幣會動態產生在這裡 -->
+            <div id="countdown-overlay" class="hidden absolute inset-0 rounded-2xl flex flex-col items-center justify-center text-center">
+                <p id="countdown-label" class="text-3xl md:text-4xl font-black text-orange-700 mb-2">準備開始</p>
+                <p id="countdown-number" class="text-8xl md:text-9xl font-black text-red-600 leading-none">3</p>
+            </div>
+
+            <!-- 固定在 16:9 遊戲畫面內的作答倒數 -->
+            <div id="answer-timer" class="hidden bg-yellow-100 border-4 border-yellow-400 text-orange-800 rounded-2xl px-8 py-3 text-2xl md:text-3xl font-black shadow-lg">
+                <span id="answer-timer-message">⏱️ 作答倒數：10 秒</span>
+            </div>
+        </div>
+
+        <!-- 控制面板與答案區 -->
+        <div id="game-controls" class="flex flex-col items-center gap-6 mb-8">
+            
+            <!-- 按鈕區：加大設計適合長輩點擊 -->
+            <div class="flex flex-wrap justify-center gap-4">
+                <button id="btn-start" onclick="startGame()" class="bg-red-500 hover:bg-red-600 text-white font-bold text-2xl md:text-3xl py-4 px-10 rounded-2xl shadow-lg transform transition active:scale-95 flex items-center gap-2 border-b-4 border-red-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" /></svg>
+                    開始掉錢
+                </button>
+                
+                <button id="btn-answer" onclick="showAnswer()" disabled class="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 disabled:border-gray-500 disabled:cursor-not-allowed disabled:transform-none text-white font-bold text-2xl md:text-3xl py-4 px-10 rounded-2xl shadow-lg transform transition active:scale-95 flex items-center gap-2 border-b-4 border-green-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                    公布答案
+                </button>
+            </div>
+
+            <!-- 顯示答案的大看板，預設隱藏 -->
+            <div id="result-board" class="hidden w-full max-w-md bg-white rounded-3xl border-4 border-green-500 shadow-2xl p-6 text-center animate-bounce">
+                <p id="result-title" class="text-3xl font-bold text-gray-700 mb-2">總金額是</p>
+                <p class="text-6xl font-black text-green-600"><span id="total-amount">0</span> <span class="text-4xl text-gray-600">元</span></p>
+            </div>
+            
+        </div>
+    </div>
+
+    <script>
+        // 遊戲狀態變數
+        let totalAmount = 0;
+        let dropIntervals = []; // 儲存計時器以便隨時取消
+        let answerCountdownTimer = null;
+        let answerTimeLeft = 10;
+        let isPlaying = false;
+        let gamePhase = 'idle'; // idle、countdown、dropping、answering、answered
+        let isMusicPlaying = false;
+        let musicMutedByUser = false;
+        let isToneInitialized = false; // 確認音效引擎是否啟動
+        let coinSoundIndex = 0;
+
+        const gameBoard = document.getElementById('game-board');
+        const resultBoard = document.getElementById('result-board');
+        const totalAmountSpan = document.getElementById('total-amount');
+        const resultTitle = document.getElementById('result-title');
+        const btnStart = document.getElementById('btn-start');
+        const btnAnswer = document.getElementById('btn-answer');
+        const musicToggleBtn = document.getElementById('music-toggle');
+        const fullscreenToggleBtn = document.getElementById('fullscreen-toggle');
+        const countdownOverlay = document.getElementById('countdown-overlay');
+        const countdownLabel = document.getElementById('countdown-label');
+        const countdownNumber = document.getElementById('countdown-number');
+        const answerTimer = document.getElementById('answer-timer');
+        const answerTimerMessage = document.getElementById('answer-timer-message');
+
+        // 音效控制元件：使用 Tone.js 合成，不需要另外下載音檔。
+        // 1. 掉錢音效：明亮的金屬感加上高音閃爍，聽起來像錢幣連續落下。
+        const coinSynth = new Tone.PolySynth(Tone.FMSynth, {
+            harmonicity: 5,
+            modulationIndex: 14,
+            oscillator: { type: "sine" },
+            envelope: { attack: 0.002, decay: 0.16, sustain: 0, release: 0.24 },
+            modulation: { type: "square" },
+            modulationEnvelope: { attack: 0.002, decay: 0.1, sustain: 0, release: 0.18 }
+        }).toDestination();
+        coinSynth.volume.value = -10;
+
+        const coinSparkleSynth = new Tone.Synth({
+            oscillator: { type: "sine" },
+            envelope: { attack: 0.002, decay: 0.12, sustain: 0, release: 0.18 }
+        }).toDestination();
+        coinSparkleSynth.volume.value = -14;
+
+        // 2. 倒數提示音：短促、清楚，適合長輩辨識節奏。
+        const countdownSynth = new Tone.Synth({
+            oscillator: { type: "triangle" },
+            envelope: { attack: 0.005, decay: 0.12, sustain: 0, release: 0.12 }
+        }).toDestination();
+        countdownSynth.volume.value = -8;
+
+        // 3. 公布答案勝利音效：明亮的上行旋律與大和弦。
+        const cheerSynth = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: "triangle" },
+            envelope: { attack: 0.02, decay: 0.12, sustain: 0.45, release: 0.8 }
+        }).toDestination();
+        cheerSynth.volume.value = -5;
+
+        // 4. 背景音樂：輕快五聲音階旋律＋低音節奏，營造熱鬧但不刺耳的氣氛。
+        const bgmSynth = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: "triangle" },
+            envelope: { attack: 0.02, decay: 0.16, sustain: 0.22, release: 0.35 }
+        }).toDestination();
+        bgmSynth.volume.value = -16;
+
+        const bgmBassSynth = new Tone.Synth({
+            oscillator: { type: "sine" },
+            envelope: { attack: 0.01, decay: 0.14, sustain: 0.22, release: 0.3 }
+        }).toDestination();
+        bgmBassSynth.volume.value = -22;
+
+        const bgmBeatSynth = new Tone.MembraneSynth({
+            pitchDecay: 0.03,
+            octaves: 3,
+            oscillator: { type: "sine" },
+            envelope: { attack: 0.001, decay: 0.16, sustain: 0, release: 0.2 }
+        }).toDestination();
+        bgmBeatSynth.volume.value = -20;
+
+        const festiveNotes = [
+            "C5", "E5", "G5", "A5", "G5", "E5", "D5", "E5",
+            "G5", "A5", "C6", "A5", "G5", "E5", "D5", "C5"
+        ];
+
+        const bgmSequence = new Tone.Sequence((time, note) => {
+            if (note) bgmSynth.triggerAttackRelease(note, "8n", time, 0.55);
+        }, festiveNotes, "8n").start(0);
+
+        const bassSequence = new Tone.Sequence((time, note) => {
+            if (note) bgmBassSynth.triggerAttackRelease(note, "4n", time, 0.42);
+        }, ["C3", null, "G2", null, "A2", null, "F2", null], "4n").start(0);
+
+        const beatSequence = new Tone.Sequence((time, note) => {
+            if (note) bgmBeatSynth.triggerAttackRelease(note, "16n", time, 0.35);
+        }, ["C2", null, "C2", "G1", "C2", null, "C2", "G1"], "8n").start(0);
+
+        Tone.Transport.bpm.value = 132;
+
+        // 初始化音效引擎（瀏覽器規定必須由使用者點擊才能啟動音效）
+        async function initAudio() {
+            if (!isToneInitialized) {
+                await Tone.start();
+                isToneInitialized = true;
+            }
+        }
+
+        function startBackgroundMusic() {
+            if (!isToneInitialized || isMusicPlaying) return;
+            Tone.Transport.start();
+            isMusicPlaying = true;
+            musicToggleBtn.innerText = "🔊";
+        }
+
+        function stopBackgroundMusic() {
+            if (!isToneInitialized) return;
+            Tone.Transport.stop();
+            isMusicPlaying = false;
+            musicToggleBtn.innerText = "🔇";
+        }
+
+        // 切換音樂功能
+        async function toggleMusic() {
+            await initAudio();
+
+            if (isMusicPlaying) {
+                musicMutedByUser = true;
+                stopBackgroundMusic();
+            } else {
+                musicMutedByUser = false;
+                startBackgroundMusic();
+            }
+        }
+
+        // 切換全螢幕，方便投影或帶領團體活動。
+        async function toggleFullscreen() {
+            try {
+                if (!document.fullscreenElement) {
+                    if (document.documentElement.requestFullscreen) {
+                        await document.documentElement.requestFullscreen();
+                    }
+                } else if (document.exitFullscreen) {
+                    await document.exitFullscreen();
+                }
+            } catch (error) {
+                console.warn('全螢幕功能無法啟動：', error);
+            }
+        }
+
+        function updateFullscreenButton() {
+            const isFullscreen = Boolean(document.fullscreenElement);
+            fullscreenToggleBtn.innerText = '⛶';
+            fullscreenToggleBtn.title = isFullscreen ? '退出全螢幕' : '切換全螢幕';
+        }
+
+        document.addEventListener('fullscreenchange', updateFullscreenButton);
+
+        function playCoinSound() {
+            if (!isToneInitialized) return;
+            const notes = ["C6", "E6", "G6", "A6"];
+            const now = Tone.now();
+            const note = notes[coinSoundIndex % notes.length];
+            const sparkle = notes[(coinSoundIndex + 2) % notes.length];
+            coinSoundIndex += 1;
+            coinSynth.triggerAttackRelease(note, "16n", now, 0.8);
+            coinSparkleSynth.triggerAttackRelease(sparkle, "32n", now + 0.05, 0.45);
+        }
+
+        function playCountdownSound(isFinal = false) {
+            if (!isToneInitialized) return;
+            const now = Tone.now();
+            countdownSynth.triggerAttackRelease(isFinal ? "C6" : "G5", "16n", now, 0.75);
+            if (isFinal) {
+                countdownSynth.triggerAttackRelease("E6", "8n", now + 0.12, 0.65);
+            }
+        }
+
+        function playVictorySound() {
+            if (!isToneInitialized) return;
+            const now = Tone.now();
+            const fanfare = [
+                ["G4", 0], ["C5", 0.12], ["E5", 0.24],
+                ["G5", 0.38], ["C6", 0.58], ["G5", 0.78]
+            ];
+            fanfare.forEach(([note, offset]) => {
+                cheerSynth.triggerAttackRelease(note, "8n", now + offset, 0.75);
+            });
+            cheerSynth.triggerAttackRelease(["C4", "E4", "G4"], "2n", now + 0.38, 0.65);
+            cheerSynth.triggerAttackRelease(["C5", "E5", "G5", "C6"], "2n", now + 0.78, 0.75);
+        }
+
+        // 不同難度的設定
+        const difficultySettings = {
+            easy: { values: [10, 50], count: [3, 6] },           // 簡單：硬幣，3-6個
+            medium: { values: [100, 500, 1000], count: [3, 5] }, // 中等：紙鈔，3-5張
+            hard: { values: [10, 50, 100, 500], count: [5, 8] }  // 困難：混和，5-8個
+        };
+
+        function wait(milliseconds) {
+            return new Promise(resolve => setTimeout(resolve, milliseconds));
+        }
+
+        function showCountdown(label, number) {
+            countdownLabel.innerText = label;
+            countdownNumber.innerText = number;
+            countdownOverlay.classList.remove('hidden');
+            countdownNumber.classList.remove('countdown-pop');
+            void countdownNumber.offsetWidth;
+            countdownNumber.classList.add('countdown-pop');
+        }
+
+        function hideCountdown() {
+            countdownOverlay.classList.add('hidden');
+        }
+
+        async function runStartCountdown() {
+            for (let seconds = 3; seconds >= 1; seconds -= 1) {
+                showCountdown('準備開始', seconds);
+                playCountdownSound(seconds === 1);
+                await wait(1000);
+            }
+
+            showCountdown('開始！', 'GO');
+            playCountdownSound(true);
+            await wait(550);
+            hideCountdown();
+        }
+
+        function clearAnswerTimer(keepVisible = false) {
+            if (answerCountdownTimer !== null) {
+                clearInterval(answerCountdownTimer);
+                answerCountdownTimer = null;
+            }
+
+            if (!keepVisible) {
+                answerTimer.classList.add('hidden');
+                answerTimer.classList.remove('timer-warning', 'time-up');
+                answerTimerMessage.innerText = '⏱️ 作答倒數：10 秒';
+                btnAnswer.classList.remove('animate-pulse');
+            }
+        }
+
+        function beginAnswerPhase() {
+            if (gamePhase !== 'dropping') return;
+
+            gamePhase = 'answering';
+            isPlaying = false;
+            btnAnswer.disabled = false;
+            btnStart.disabled = true;
+            answerTimeLeft = 10;
+            answerTimerMessage.innerText = '⏱️ 作答倒數：10 秒';
+            answerTimer.classList.remove('hidden');
+            answerTimer.classList.remove('timer-warning', 'time-up');
+            btnAnswer.classList.remove('animate-pulse');
+
+            answerCountdownTimer = setInterval(() => {
+                answerTimeLeft -= 1;
+                answerTimerMessage.innerText = `⏱️ 作答倒數：${Math.max(answerTimeLeft, 0)} 秒`;
+
+                if (answerTimeLeft <= 3 && answerTimeLeft > 0) {
+                    answerTimer.classList.add('timer-warning');
+                    playCountdownSound(false);
+                }
+
+                if (answerTimeLeft <= 0) {
+                    // 時間到只停止倒數，答案仍由帶領者手動公布。
+                    clearAnswerTimer(true);
+                    answerTimer.classList.remove('timer-warning');
+                    answerTimer.classList.add('time-up');
+                    answerTimerMessage.innerText = '⏰ 時間到！請按下「公布答案」';
+                    btnAnswer.disabled = false;
+                    btnAnswer.classList.add('animate-pulse');
+                }
+            }, 1000);
+        }
+
+        async function startGame() {
+            if (gamePhase !== 'idle') return; // 避免重複點擊
+
+            // 先鎖定遊戲狀態，避免等待音效啟動時被重複點擊。
+            gamePhase = 'countdown';
+            isPlaying = true;
+            await initAudio();
+
+            // 第一次開始遊戲時自動播放背景音樂；使用者按右上角即可關閉。
+            if (!musicMutedByUser) startBackgroundMusic();
+
+            // 重置遊戲狀態
+            totalAmount = 0;
+            gameBoard.querySelectorAll('.money-item').forEach(item => item.remove());
+            resultBoard.classList.add('hidden');
+            resultBoard.classList.remove('animate-bounce');
+            resultTitle.innerText = '總金額是';
+            clearAnswerTimer();
+
+            btnStart.disabled = true;
+            btnStart.classList.add('opacity-50', 'cursor-not-allowed');
+            btnAnswer.disabled = true;
+
+            // 取得當前選擇的難度
+            const difficultyLevel = document.querySelector('input[name="difficulty"]:checked').value;
+            const settings = difficultySettings[difficultyLevel];
+
+            // 決定這次要掉多少個錢幣
+            const minCount = settings.count[0];
+            const maxCount = settings.count[1];
+            const itemCount = Math.floor(Math.random() * (maxCount - minCount + 1)) + minCount;
+
+            // 清除之前的計時器（安全機制）
+            dropIntervals.forEach(clearTimeout);
+            dropIntervals = [];
+
+            // 開始前倒數 3 秒，讓長輩準備注意畫面。
+            await runStartCountdown();
+            if (gamePhase !== 'countdown') return;
+            gamePhase = 'dropping';
+
+            // 對於長輩，錢幣之間保留清楚的反應時間。
+            const delayBetweenDrops = 1200;
+
+            // 依序排程掉落錢幣
+            for (let i = 0; i < itemCount; i++) {
+                const timer = setTimeout(() => {
+                    dropMoney(settings.values);
+                    playCoinSound();
+
+                    // 最後一個錢幣動畫完成後，開始 10 秒作答倒數。
+                    if (i === itemCount - 1) {
+                        const finishTimer = setTimeout(beginAnswerPhase, 750);
+                        dropIntervals.push(finishTimer);
+                    }
+                }, i * delayBetweenDrops);
+
+                dropIntervals.push(timer);
+            }
+        }
+
+        function dropMoney(possibleValues) {
+            // 隨機選擇一種面額
+            const value = possibleValues[Math.floor(Math.random() * possibleValues.length)];
+            totalAmount += value;
+
+            // 建立 DOM 元素
+            const moneyEl = document.createElement('div');
+            moneyEl.classList.add('money-item');
+            moneyEl.innerText = value;
+
+            // 根據面額加入對應的樣式類別
+            if (value === 10) moneyEl.classList.add('coin-10');
+            else if (value === 50) moneyEl.classList.add('coin-50');
+            else if (value === 100) moneyEl.classList.add('bill-100');
+            else if (value === 500) moneyEl.classList.add('bill-500');
+            else if (value === 1000) moneyEl.classList.add('bill-1000');
+
+            // 取得遊戲區域的尺寸
+            const boardWidth = gameBoard.clientWidth;
+            const boardHeight = gameBoard.clientHeight;
+
+            // 估算元素的尺寸以便計算邊界 (稍微寫死最大尺寸以防超出)
+            const elementWidth = value >= 100 ? 160 : 80;
+            const elementHeight = value >= 100 ? 80 : 80;
+
+            // 隨機計算位置 (保留邊距，避免超出框框；也兼顧手機窄畫面)
+            const padding = 20;
+            const maxX = Math.max(padding, boardWidth - elementWidth - padding);
+            const maxY = Math.max(padding, boardHeight - elementHeight - padding);
+            const randomX = Math.floor(Math.random() * Math.max(1, maxX - padding + 1)) + padding;
+            const randomY = Math.floor(Math.random() * Math.max(1, maxY - padding + 1)) + padding;
+
+            // 設定位置
+            moneyEl.style.left = `${randomX}px`;
+            moneyEl.style.top = `${randomY}px`;
+            
+            // 些微的隨機旋轉，讓畫面更自然
+            const randomRotation = Math.floor(Math.random() * 30) - 15;
+            moneyEl.style.transform = `rotate(${randomRotation}deg)`;
+
+            // 加入遊戲盤面
+            gameBoard.appendChild(moneyEl);
+        }
+
+        function showAnswer() {
+            if (gamePhase !== 'answering') return;
+
+            clearAnswerTimer();
+            gamePhase = 'idle';
+            isPlaying = false;
+            resultTitle.innerText = '總金額是';
+
+            // 更新數字並顯示板子
+            totalAmountSpan.innerText = totalAmount;
+            resultBoard.classList.remove('hidden');
+
+            // 重新加入動畫類別以觸發彈跳效果
+            void resultBoard.offsetWidth;
+            resultBoard.classList.add('animate-bounce');
+
+            // 播放明亮、熱鬧的勝利音效
+            playVictorySound();
+
+            // 看過答案後引導重新開始下一題
+            btnAnswer.disabled = true;
+            btnStart.disabled = false;
+            btnStart.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+    </script>
+</body>
+</html>
